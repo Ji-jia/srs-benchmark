@@ -246,6 +246,24 @@ Then run the following command:
 uv run script.py --algo FSRS-rs --short
 ```
 
+Recovered SM19 mapping experiments use the standard day-interval evaluation
+without same-day reviews:
+
+```bash
+uv run script.py --algo Recovered-SM19-Again0 --raw --file
+uv run script.py --algo Recovered-SM19-Again1 --raw --file
+uv run script.py --algo Recovered-SM19-Again2 --raw --file
+```
+
+The suffix is the explicit SuperMemo grade assigned to Anki Again. Hard, Good,
+and Easy map to SM19 grades 3, 4, and 5. Predictions are produced before the
+current review grade is read, and that grade is committed exactly once.
+
+Recovered SM19 rejects `--short`, `--secs`,
+`--equalize_test_with_non_secs`, `--train_equals_test`, and `--two_buttons`.
+TimeSeriesSplit selects score rows only; it never resets the chronological
+online model at fold boundaries.
+
 > Please place the [fsrs-optimizer repository](https://github.com/open-spaced-repetition/fsrs-optimizer) in the same directory as this repository.
 
 Set the number of processes:

@@ -30,6 +30,9 @@ ModelName = Literal[
     "HLR",
     "ACT-R",
     "Anki",
+    "Recovered-SM19-Again0",
+    "Recovered-SM19-Again1",
+    "Recovered-SM19-Again2",
     # DASH variants
     "DASH",
     "DASH[MCM]",

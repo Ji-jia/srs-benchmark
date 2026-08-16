@@ -159,6 +159,7 @@ weights/
 
 # temp files
 rwkv/temp
+.sm19-cloud-smoke/
 
 # test files
 **/test/
