@@ -259,6 +259,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Use an existing verified dataset root instead of HF_TOKEN download",
     )
+    parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Download and verify the pinned inputs without running the benchmark",
+    )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
     return parser.parse_args()
 
@@ -269,14 +274,34 @@ def main() -> int:
     work_dir.mkdir(parents=True, exist_ok=True)
     state_path = work_dir / "smoke-state.json"
     result_path = work_dir / "smoke-result.jsonl"
+    source_data_root = (
+        args.source_data_root.resolve() if args.source_data_root else None
+    )
     sources = {
         user_id: source_file(
-            args.source_data_root.resolve() if args.source_data_root else None,
+            source_data_root,
             work_dir / "download",
             user_id,
         )
         for user_id in USERS
     }
+    if args.prepare_only:
+        prepared_root = source_data_root or (work_dir / "download")
+        print(
+            json.dumps(
+                {
+                    "dataset": REPOSITORY,
+                    "revision": REVISION,
+                    "source_data_root": str(prepared_root),
+                    "status": "prepared",
+                    "users": sorted(sources),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
     results: list[dict[str, Any]] = []
     state: dict[str, Any] = {
         "algorithm": ALGORITHM,
