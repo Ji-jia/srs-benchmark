@@ -324,7 +324,7 @@ def main() -> int:
     try:
         for user_id in USERS:
             result, metadata = run_user(
-                user_id, sources[user_id], work_dir, args.python.resolve()
+                user_id, sources[user_id], work_dir, args.python.absolute()
             )
             results.append(result)
             results.sort(key=lambda row: row["user"])

@@ -85,6 +85,40 @@ class SM19CloudSmokeTests(unittest.TestCase):
             self.assertFalse((root / "work" / "smoke-state.json").exists())
             self.assertFalse((root / "work" / "smoke-result.jsonl").exists())
 
+    def test_python_executable_is_made_absolute_without_resolving(self) -> None:
+        python = Path("venv-python-symlink")
+        expected_python = python.absolute()
+        original_resolve = Path.resolve
+
+        def reject_python_resolve(
+            path: Path, *resolve_args: object, **resolve_kwargs: object
+        ) -> Path:
+            if path == python:
+                raise AssertionError("the Python symlink must not be resolved")
+            return original_resolve(path, *resolve_args, **resolve_kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            args = SimpleNamespace(
+                prepare_only=False,
+                python=python,
+                source_data_root=None,
+                work_dir=Path(directory),
+            )
+            with (
+                patch.dict(smoke.USERS, {7: {}}, clear=True),
+                patch.object(smoke, "parse_args", return_value=args),
+                patch.object(smoke, "source_file", return_value=Path("source")),
+                patch.object(
+                    smoke,
+                    "run_user",
+                    return_value=({"user": 7}, {}),
+                ) as run_user,
+                patch.object(Path, "resolve", reject_python_resolve),
+            ):
+                self.assertEqual(smoke.main(), 0)
+
+            self.assertEqual(run_user.call_args.args[3], expected_python)
+
     def test_result_must_match_all_expected_fields(self) -> None:
         expected_result = {"metrics": {"AUC": 0.5}, "user": 7, "size": 9}
         expected = {"size_bytes": 1, "sha256": "unused", "result": expected_result}
