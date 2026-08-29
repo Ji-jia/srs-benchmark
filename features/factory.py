@@ -18,6 +18,7 @@ from .neural_engineer import (
     HLRFeatureEngineer,
     NN17FeatureEngineer,
 )
+from .recovered_sm19 import RecoveredSM19FeatureEngineer
 from .simple_engineer import AVGFeatureEngineer, RMSEBinsExploitFeatureEngineer
 
 FEATURE_ENGINEER_REGISTRY: dict[ModelName, type[BaseFeatureEngineer]] = {
@@ -51,6 +52,9 @@ FEATURE_ENGINEER_REGISTRY: dict[ModelName, type[BaseFeatureEngineer]] = {
     # Memory models that don't use tensors
     "SM2": SM2FeatureEngineer,
     "Ebisu-v2": EbisuFeatureEngineer,
+    "Recovered-SM19-Again0": RecoveredSM19FeatureEngineer,
+    "Recovered-SM19-Again1": RecoveredSM19FeatureEngineer,
+    "Recovered-SM19-Again2": RecoveredSM19FeatureEngineer,
     # Simple models that only need basic features
     "AVG": AVGFeatureEngineer,
     "MOVING-AVG": AVGFeatureEngineer,

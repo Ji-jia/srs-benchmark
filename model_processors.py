@@ -16,10 +16,118 @@ from models.ebisu import Ebisu
 from models.fsrs_rs import FSRSRsBackend
 from models.fsrs_v6 import FSRS6
 from models.fsrs_v6_one_step import FSRS_one_step
+from models.recovered_sm19 import RecoveredSM19
 from models.rmse_bins_exploit import RMSEBinsExploit
 from models.sm2 import sm2
 from models.trainable import TrainableModel
 from utils import Collection, evaluate, get_bin, save_evaluation_file
+
+RECOVERED_SM19_AGAIN_GRADES = {
+    "Recovered-SM19-Again0": 0,
+    "Recovered-SM19-Again1": 1,
+    "Recovered-SM19-Again2": 2,
+}
+
+
+def time_series_test_mask(score_count: int, n_splits: int) -> np.ndarray:
+    """Return the union of test positions from the benchmark TimeSeriesSplit."""
+    mask = np.zeros(score_count, dtype=bool)
+    positions = np.arange(score_count)
+    for _, test_index in TimeSeriesSplit(n_splits=n_splits).split(positions):
+        mask[test_index] = True
+    return mask
+
+
+def process_recovered_sm19(
+    user_id: int, dataset: pd.DataFrame, config: Config
+) -> tuple[dict, dict | None]:
+    """Replay one user's reviews once, predicting before every current grade.
+
+    TimeSeriesSplit defines only which standard benchmark rows are scored. It
+    never resets the online SM19 user model or removes non-score rows from its
+    causal replay stream.
+    """
+    required_columns = {
+        "card_id",
+        "review_th",
+        "delta_t",
+        "rating",
+        "sm19_score",
+        "sm19_score_y",
+        "sm19_score_i",
+        "sm19_score_rmse_bins_lapse",
+    }
+    missing = required_columns.difference(dataset.columns)
+    if missing:
+        raise ValueError(
+            "Recovered-SM19 feature stream is missing columns: "
+            + ", ".join(sorted(missing))
+        )
+
+    replay = dataset.reset_index(drop=True)
+    if (
+        replay["review_th"].duplicated().any()
+        or not replay["review_th"].is_monotonic_increasing
+    ):
+        raise ValueError(
+            "Recovered-SM19 requires unique chronological review_th; "
+            "it will not reorder causal events"
+        )
+
+    score_rows = replay[replay["sm19_score"].astype(bool)].copy()
+    score_rows.sort_values("review_th", inplace=True)
+    split_mask = time_series_test_mask(len(score_rows), config.n_splits)
+    scored = score_rows.iloc[split_mask].copy()
+    scored_review_ids = set(scored["review_th"].tolist())
+
+    try:
+        again_grade = RECOVERED_SM19_AGAIN_GRADES[config.model_name]
+    except KeyError as error:
+        raise ValueError(
+            f"unsupported Recovered SM19 experiment: {config.model_name}"
+        ) from error
+    model = RecoveredSM19(again_grade)
+    predictions_by_review: dict[object, float] = {}
+
+    for index in replay.index:
+        card_id = replay.at[index, "card_id"]
+        review_th = replay.at[index, "review_th"]
+        elapsed_days = float(replay.at[index, "delta_t"])
+
+        # The current rating is deliberately not read until prediction is final.
+        probability = float(model.predict(card_id, elapsed_days))
+        if not np.isfinite(probability) or not 0 <= probability <= 1:
+            raise ValueError(
+                f"Recovered-SM19 produced invalid R={probability} at review {review_th}"
+            )
+        if review_th in scored_review_ids:
+            predictions_by_review[review_th] = probability
+
+        anki_rating = int(replay.at[index, "rating"])
+        model.commit(card_id, elapsed_days, anki_rating)
+
+    expected_review_ids = scored["review_th"].tolist()
+    if set(predictions_by_review) != set(expected_review_ids):
+        raise AssertionError(
+            "Recovered-SM19 scored prediction IDs do not match split IDs"
+        )
+
+    p = [predictions_by_review[review_id] for review_id in expected_review_ids]
+    y = scored["sm19_score_y"].astype(int).tolist()
+    scored["y"] = y
+    scored["i"] = scored["sm19_score_i"].astype(int)
+    scored["rmse_bins_lapse"] = scored["sm19_score_rmse_bins_lapse"].astype(int)
+    scored["p"] = p
+
+    save_evaluation_file(user_id, scored, config)
+    return evaluate(
+        y,
+        p,
+        scored,
+        config.get_evaluation_file_name(),
+        user_id,
+        config,
+    )
 
 
 def process_untrainable(

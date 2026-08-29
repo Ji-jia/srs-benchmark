@@ -21,10 +21,12 @@ from tqdm.auto import tqdm
 from config import Config, create_parser
 from data_loader import UserDataLoader
 from model_processors import (
+    RECOVERED_SM19_AGAIN_GRADES,
     baseline,
     fsrs_one_step,
     moving_avg,
     process_fsrs_rs,
+    process_recovered_sm19,
     process_untrainable,
     rmse_bins_exploit,
 )
@@ -352,6 +354,8 @@ def process(user_id: int, device_id: int | None = None) -> tuple[dict, dict | No
     dataset = data_loader.load_user_data(user_id)
 
     # Handle special cases
+    if config.model_name in RECOVERED_SM19_AGAIN_GRADES:
+        return process_recovered_sm19(user_id, dataset, config)
     if config.model_name == "SM2" or config.model_name.startswith("Ebisu"):
         return process_untrainable(user_id, dataset, config)
     if config.model_name == "AVG":
